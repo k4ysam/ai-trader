@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { AnalyzeResponse } from "@/types";
 import { analyzeHeadline } from "@/lib/agents";
 import { calculateNewPrice } from "@/lib/price-engine";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function badRequest(message: string): Response {
   return Response.json({ error: message }, { status: 400 });
@@ -12,10 +13,16 @@ function serverError(message: string): Response {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  // Guard API key before doing any work.
+  // Rate limiting — 20 req/min per IP.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (!checkRateLimit(ip)) {
+    return Response.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  // Guard API key — generic message to avoid leaking infrastructure details.
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return serverError("ANTHROPIC_API_KEY not configured");
+    return serverError("Service not configured");
   }
 
   // Parse body — malformed JSON is a client error.

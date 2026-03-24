@@ -8,9 +8,11 @@ import type { AgentDecision, PriceEngineResult } from "@/types";
 // ---------------------------------------------------------------------------
 const mockAnalyzeHeadline = vi.hoisted(() => vi.fn());
 const mockCalculateNewPrice = vi.hoisted(() => vi.fn());
+const mockCheckRateLimit = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/agents", () => ({ analyzeHeadline: mockAnalyzeHeadline }));
 vi.mock("@/lib/price-engine", () => ({ calculateNewPrice: mockCalculateNewPrice }));
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: mockCheckRateLimit }));
 
 // Import AFTER mocks are registered.
 import { POST } from "@/app/api/analyze/route";
@@ -80,7 +82,9 @@ describe("POST /api/analyze", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-api-key-dummy");
     mockAnalyzeHeadline.mockReset();
     mockCalculateNewPrice.mockReset();
-    // Default happy-path return values; individual tests override as needed.
+    mockCheckRateLimit.mockReset();
+    // Default: rate limit passes, happy-path lib returns.
+    mockCheckRateLimit.mockReturnValue(true);
     mockAnalyzeHeadline.mockResolvedValue({
       decisions: stubDecisions,
       partialFailure: false,
@@ -194,14 +198,26 @@ describe("POST /api/analyze", () => {
   // Group 3: Missing API key
   // -------------------------------------------------------------------------
   describe("Group 3: Missing API key", () => {
-    it("12. returns 500 with correct message when ANTHROPIC_API_KEY is not set", async () => {
+    it("12. returns 500 with generic message when ANTHROPIC_API_KEY is not set", async () => {
       vi.stubEnv("ANTHROPIC_API_KEY", "");
 
       const res = await POST(makeRequest({ headline: "NVDA beats earnings", currentPrice: 875 }));
       const body = await res.json();
 
       expect(res.status).toBe(500);
-      expect(body).toEqual({ error: "ANTHROPIC_API_KEY not configured" });
+      expect(body).toEqual({ error: "Service not configured" });
+      // Must NOT leak the env var name.
+      expect(JSON.stringify(body)).not.toContain("ANTHROPIC_API_KEY");
+    });
+
+    it("12b. returns 429 when rate limit is exceeded", async () => {
+      mockCheckRateLimit.mockReturnValue(false);
+
+      const res = await POST(makeRequest({ headline: "NVDA beats earnings", currentPrice: 875 }));
+      const body = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(typeof body.error).toBe("string");
     });
   });
 
