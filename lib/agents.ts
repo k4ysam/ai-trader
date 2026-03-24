@@ -10,8 +10,13 @@ import { MODEL_ID } from "@/lib/constants";
 
 const client = new Anthropic();
 
-const VALID_ACTIONS = new Set<string>(["BUY", "SELL", "HOLD"]);
-const VALID_SIZES = new Set<string>(["aggressive", "moderate", "small"]);
+function isTradeAction(v: unknown): v is TradeAction {
+  return v === "BUY" || v === "SELL" || v === "HOLD";
+}
+
+function isTradeSize(v: unknown): v is TradeSize {
+  return v === "aggressive" || v === "moderate" || v === "small";
+}
 
 const JSON_SCHEMA = `{
   "reasoning": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
@@ -126,15 +131,19 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
 
   const r = raw as Record<string, unknown>;
 
-  if (!Array.isArray(r.reasoning) || r.reasoning.length !== 3) {
+  if (
+    !Array.isArray(r.reasoning) ||
+    r.reasoning.length !== 3 ||
+    !r.reasoning.every((s) => typeof s === "string")
+  ) {
     throw new Error("reasoning must be an array of exactly 3 strings");
   }
 
-  if (!VALID_ACTIONS.has(r.action as string)) {
+  if (!isTradeAction(r.action)) {
     throw new Error(`Invalid action: ${String(r.action)}`);
   }
 
-  if (!VALID_SIZES.has(r.size as string)) {
+  if (!isTradeSize(r.size)) {
     throw new Error(`Invalid size: ${String(r.size)}`);
   }
 
@@ -148,10 +157,12 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
     throw new Error(`Invalid conviction: ${String(conviction)}`);
   }
 
+  // Casts are safe: all three fields are narrowed by type predicates above,
+  // and reasoning elements are verified as strings by the .every() guard.
   return {
     reasoning: r.reasoning as [string, string, string],
-    action: r.action as TradeAction,
-    size: r.size as TradeSize,
+    action: r.action,
+    size: r.size,
     conviction,
   };
 }
@@ -162,6 +173,13 @@ export async function callAgent(
   currentPrice: number
 ): Promise<AgentDecision> {
   try {
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+      throw new Error(`Invalid currentPrice: ${currentPrice}`);
+    }
+    if (headline.length > 500) {
+      throw new Error("headline must be at most 500 characters");
+    }
+
     const response = await client.messages.create({
       model: MODEL_ID,
       max_tokens: 512,
@@ -180,7 +198,11 @@ export async function callAgent(
       throw new Error("Unexpected response content type");
     }
 
-    const stripped = block.text.replace(/^```(?:json)?\n?|\n?```$/g, "").trim();
+    // Trim first so leading/trailing whitespace doesn't prevent fence detection.
+    const trimmed = block.text.trim();
+    const stripped = trimmed.startsWith("```")
+      ? trimmed.replace(/^```(?:json)?\r?\n?/, "").replace(/\r?\n?```$/, "")
+      : trimmed;
     const parsed: unknown = JSON.parse(stripped);
     const validated = validateRawResponse(parsed);
 
@@ -222,8 +244,8 @@ export async function analyzeHeadline(
       traderName: personality.name,
       archetype: personality.archetype,
       reasoning: ["Error", "Error", "Error"],
-      action: "HOLD" as TradeAction,
-      size: "small" as TradeSize,
+      action: "HOLD",
+      size: "small",
       conviction: 1,
       error: msg,
     };
