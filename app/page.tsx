@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { STARTING_PRICE, STOCK_TICKER } from "@/lib/constants";
 import type { AgentDecision, AnalyzeResponse, PriceEvent } from "@/types";
 import HeadlineInput from "@/components/HeadlineInput";
@@ -8,6 +8,8 @@ import AgentPanel from "@/components/AgentPanel";
 import PriceTicker from "@/components/PriceTicker";
 import PriceChart from "@/components/PriceChart";
 import DecisionLog from "@/components/DecisionLog";
+
+const COOLDOWN_MS = 2000;
 
 export default function Home() {
   const [currentPrice, setCurrentPrice] = useState(STARTING_PRICE);
@@ -18,12 +20,22 @@ export default function Home() {
   const [events, setEvents] = useState<PriceEvent[]>([]);
   const [latestDecisions, setLatestDecisions] = useState<AgentDecision[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCooldown, setIsCooldown] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [partialFailure, setPartialFailure] = useState(false);
+  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
+    };
+  }, []);
 
   async function handleSubmit(headline: string) {
-    if (isLoading) return;
+    if (isLoading || isCooldown) return;
     setIsLoading(true);
     setError(null);
+    setPartialFailure(false);
 
     try {
       const res = await fetch("/api/analyze", {
@@ -70,6 +82,11 @@ export default function Home() {
       setPriceHistory((prev) => [...prev, { time: timeLabel, price: newPrice }]);
       setEvents((prev) => [...prev, event]);
       setLatestDecisions(decisions);
+      setPartialFailure(data.partialFailure);
+
+      // Start cooldown to prevent rapid-fire submissions.
+      setIsCooldown(true);
+      cooldownTimer.current = setTimeout(() => setIsCooldown(false), COOLDOWN_MS);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -92,12 +109,19 @@ export default function Home() {
         </div>
 
         {/* Input */}
-        <HeadlineInput onSubmit={handleSubmit} isLoading={isLoading} />
+        <HeadlineInput onSubmit={handleSubmit} isLoading={isLoading} isCooldown={isCooldown} />
 
         {/* Error banner */}
         {error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             {error}
+          </div>
+        )}
+
+        {/* Partial failure banner */}
+        {partialFailure && !error && (
+          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+            Some agents encountered errors. Results may be incomplete.
           </div>
         )}
 
