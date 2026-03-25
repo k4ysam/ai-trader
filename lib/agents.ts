@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type {
   AgentDecision,
   AgentRawResponse,
@@ -9,8 +9,6 @@ import { MODEL_ID } from "@/lib/constants";
 import { TRADER_PERSONALITIES } from "@/lib/personalities";
 
 export { TRADER_PERSONALITIES };
-
-const client = new Anthropic();
 
 function isTradeAction(v: unknown): v is TradeAction {
   return v === "BUY" || v === "SELL" || v === "HOLD";
@@ -53,8 +51,6 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
     throw new Error(`Invalid conviction: ${String(conviction)}`);
   }
 
-  // Casts are safe: all three fields are narrowed by type predicates above,
-  // and reasoning elements are verified as strings by the .every() guard.
   return {
     reasoning: r.reasoning as [string, string, string],
     action: r.action,
@@ -76,30 +72,36 @@ export async function callAgent(
       throw new Error("headline must be at most 500 characters");
     }
 
-    const response = await client.messages.create({
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
       model: MODEL_ID,
-      max_tokens: 512,
-      temperature: 0.7,
-      system: personality.systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: `NVDA is currently at $${currentPrice}. Headline: ${headline}`,
-        },
-      ],
+      systemInstruction: personality.systemPrompt,
+      generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
     });
 
-    const block = response.content[0];
-    if (block.type !== "text") {
-      throw new Error("Unexpected response content type");
-    }
+    const userMessage = `NVDA is currently at $${currentPrice}. Headline: ${headline}`;
+    const result = await model.generateContent(userMessage);
+    const text = result.response.text();
 
     // Trim first so leading/trailing whitespace doesn't prevent fence detection.
-    const trimmed = block.text.trim();
+    const trimmed = text.trim();
     const stripped = trimmed.startsWith("```")
       ? trimmed.replace(/^```(?:json)?\r?\n?/, "").replace(/\r?\n?```$/, "")
       : trimmed;
-    const parsed: unknown = JSON.parse(stripped);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripped);
+    } catch {
+      // Retry: extract first {...} from the raw text via regex.
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("No JSON object found in response");
+      parsed = JSON.parse(match[0]);
+    }
+
     const validated = validateRawResponse(parsed);
 
     return {

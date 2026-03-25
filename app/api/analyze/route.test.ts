@@ -79,7 +79,7 @@ function makeRequest(body: unknown): NextRequest {
 // ---------------------------------------------------------------------------
 describe("POST /api/analyze", () => {
   beforeEach(() => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "test-api-key-dummy");
+    vi.stubEnv("GEMINI_API_KEY", "test-api-key-dummy");
     mockAnalyzeHeadline.mockReset();
     mockCalculateNewPrice.mockReset();
     mockCheckRateLimit.mockReset();
@@ -198,8 +198,8 @@ describe("POST /api/analyze", () => {
   // Group 3: Missing API key
   // -------------------------------------------------------------------------
   describe("Group 3: Missing API key", () => {
-    it("12. returns 500 with generic message when ANTHROPIC_API_KEY is not set", async () => {
-      vi.stubEnv("ANTHROPIC_API_KEY", "");
+    it("12. returns 500 with generic message when GEMINI_API_KEY is not set", async () => {
+      vi.stubEnv("GEMINI_API_KEY", "");
 
       const res = await POST(makeRequest({ headline: "NVDA beats earnings", currentPrice: 875 }));
       const body = await res.json();
@@ -207,7 +207,7 @@ describe("POST /api/analyze", () => {
       expect(res.status).toBe(500);
       expect(body).toEqual({ error: "Service not configured" });
       // Must NOT leak the env var name.
-      expect(JSON.stringify(body)).not.toContain("ANTHROPIC_API_KEY");
+      expect(JSON.stringify(body)).not.toContain("GEMINI_API_KEY");
     });
 
     it("12b. returns 429 when rate limit is exceeded", async () => {

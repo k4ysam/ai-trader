@@ -20,7 +20,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   // Guard API key — generic message to avoid leaking infrastructure details.
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return serverError("Service not configured");
   }
