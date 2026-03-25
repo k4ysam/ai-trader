@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Trader
 
-## Getting Started
+A Next.js single-page app where four AI trader agents analyze NVDA headlines and produce BUY/SELL/HOLD decisions that drive a simulated price engine.
 
-First, run the development server:
+## Overview
+
+- **Four AI agents** with distinct trader personalities call the Gemini API and independently analyze each headline
+- **Price engine** aggregates agent decisions (weighted by conviction) to move a simulated NVDA price
+- **Live chart** tracks price history; a decision log records every agent call
+
+**Stack**: Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Recharts · `@google/genai`
+
+---
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- A [Google AI Studio](https://aistudio.google.com/) API key
+
+### Install
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Configure environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.local.example .env.local
+# Edit .env.local and set GEMINI_API_KEY
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+<!-- AUTO-GENERATED -->
+### Environment variables
 
-## Learn More
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEMINI_API_KEY` | Yes | Google Gemini API key used by all four trader agents |
+<!-- /AUTO-GENERATED -->
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Commands
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+<!-- AUTO-GENERATED -->
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Production build with type checking |
+| `npm start` | Start production server (requires build first) |
+| `npm test` | Run test suite once |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
+<!-- /AUTO-GENERATED -->
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### `POST /api/analyze`
+
+Runs all four trader agents against the given headline and returns their decisions plus the updated price.
+
+**Request body**
+```json
+{
+  "headline": "NVDA beats earnings estimates by 20%",
+  "currentPrice": 875.50
+}
+```
+
+**Response**
+```json
+{
+  "decisions": [
+    { "agentId": "momentum", "action": "BUY", "conviction": 0.85, "reasoning": "..." },
+    ...
+  ],
+  "priceResult": { "newPrice": 912.30, "delta": 36.80, "deltaPercent": 4.21 },
+  "partialFailure": false
+}
+```
+
+**Error codes**
+| Status | Meaning |
+|--------|---------|
+| 400 | Invalid input (missing/bad headline or currentPrice) |
+| 429 | Rate limit exceeded (20 req/min per IP) |
+| 500 | Internal server error |
+
+---
+
+## Key files
+
+| File | Purpose |
+|------|---------|
+| `types/index.ts` | All TypeScript interfaces |
+| `lib/constants.ts` | Config: starting price, model ID, clamp values |
+| `lib/price-engine.ts` | Pure `calculateNewPrice()` — no side effects |
+| `lib/agents.ts` | Trader personalities + Gemini SDK calls |
+| `app/api/analyze/route.ts` | POST endpoint — input validation + orchestration |
+| `app/page.tsx` | Main UI — all state lives here |
+
+---
+
+## Testing
+
+```bash
+npm run test:coverage
+```
+
+Coverage target: 80%+ on all `lib/` files.
