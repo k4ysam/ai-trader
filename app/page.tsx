@@ -21,6 +21,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(headline: string) {
+    if (isLoading) return;
     setIsLoading(true);
     setError(null);
 
@@ -32,8 +33,7 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        setError(`Error ${res.status}: ${text}`);
+        setError(`Request failed (${res.status}). Please try again.`);
         return;
       }
 

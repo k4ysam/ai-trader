@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     // Component tests use jsdom; lib/api tests use node.
     // Per-file environment overrides via @vitest-environment docblock.
+    globals: true,
     environment: "node",
     coverage: {
       provider: "v8",

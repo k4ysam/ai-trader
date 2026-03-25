@@ -22,7 +22,7 @@ export default function DecisionLog({ events }: DecisionLogProps) {
       <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Event Log
       </p>
-      <ol className="flex max-h-64 flex-col-reverse gap-2 overflow-y-auto">
+      <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto">
         {[...events].reverse().map((event) => {
           const { priceResult } = event;
           const deltaSign = priceResult.delta >= 0 ? "+" : "";
