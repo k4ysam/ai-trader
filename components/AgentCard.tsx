@@ -1,46 +1,114 @@
 import type { AgentDecision, TradeAction } from "@/types";
+import { AGENT_COLORS } from "@/lib/constants";
+import { TRADER_PERSONALITIES } from "@/lib/personalities";
 
 const ACTION_STYLES: Record<TradeAction, string> = {
-  BUY: "bg-green-500/20 text-green-400 border-green-500/40",
+  BUY:  "bg-green-500/20 text-green-400 border-green-500/40",
   SELL: "bg-red-500/20 text-red-400 border-red-500/40",
   HOLD: "bg-zinc-700/40 text-zinc-400 border-zinc-600/40",
 };
 
 const SIZE_LABEL: Record<string, string> = {
   aggressive: "Aggressive",
-  moderate: "Moderate",
-  small: "Small",
+  moderate:   "Moderate",
+  small:      "Small",
 };
 
 interface AgentCardProps {
   decision: AgentDecision;
   isLoading: boolean;
+  fadeDelay?: number;
 }
 
-function Skeleton() {
+interface ThinkingSkeletonProps {
+  traderName: string;
+  archetype: string;
+}
+
+function ThinkingSkeleton({ traderName, archetype }: ThinkingSkeletonProps) {
+  const colors = AGENT_COLORS[traderName];
+  const personality = TRADER_PERSONALITIES.find((p) => p.name === traderName);
+  const emoji = personality?.emoji ?? "🤖";
+
+  const waveDelays = [0, 150, 300, 450, 600];
+
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 animate-pulse">
+    <div
+      className={`relative overflow-hidden flex flex-col gap-3 rounded-xl border bg-zinc-900 p-4 panel-depth ring-1 ring-white/5 animate-borderGlow ${colors?.border ?? "border-zinc-700"}`}
+      style={{ "--glow-color": colors?.hex ?? "#3b82f6" } as React.CSSProperties}
+    >
+      {/* Scanline sweep */}
+      <div
+        className="animate-scanline pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{ background: `linear-gradient(to right, transparent, ${colors?.hex ?? "#3b82f6"}80, transparent)` }}
+      />
+
+      {/* Header — show real name/archetype so the card has identity */}
       <div className="flex items-center gap-2">
-        <div className="h-8 w-8 rounded-full bg-zinc-700" />
-        <div className="h-4 w-24 rounded bg-zinc-700" />
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base"
+          style={{ background: `${colors?.hex ?? "#3b82f6"}20` }}
+        >
+          {emoji}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white">{traderName}</p>
+          <p className="text-xs capitalize" style={{ color: colors?.hex ?? "#71717a" }}>
+            {archetype}
+          </p>
+        </div>
       </div>
-      <div className="space-y-2">
-        <div className="h-3 w-full rounded bg-zinc-800" />
-        <div className="h-3 w-5/6 rounded bg-zinc-800" />
-        <div className="h-3 w-4/6 rounded bg-zinc-800" />
+
+      {/* Waveform bars — "brain activity" indicator */}
+      <div className="flex items-center justify-center gap-1 py-3">
+        {waveDelays.map((delay, i) => (
+          <div
+            key={i}
+            className="animate-waveform w-1 rounded-full"
+            style={{
+              animationDelay: `${delay}ms`,
+              background: colors?.hex ?? "#3b82f6",
+              height: "4px",
+            }}
+          />
+        ))}
       </div>
-      <div className="h-6 w-16 rounded bg-zinc-700" />
+
+      {/* Thinking dots + label */}
+      <div className="flex items-center justify-center gap-2">
+        <div className="flex gap-1">
+          {[0, 200, 400].map((delay, i) => (
+            <div
+              key={i}
+              className="animate-dotPulse h-1.5 w-1.5 rounded-full"
+              style={{ animationDelay: `${delay}ms`, background: colors?.hex ?? "#3b82f6" }}
+            />
+          ))}
+        </div>
+        <span className="text-xs" style={{ color: colors?.hex ?? "#71717a" }}>
+          Analyzing...
+        </span>
+      </div>
     </div>
   );
 }
 
-export default function AgentCard({ decision, isLoading }: AgentCardProps) {
-  if (isLoading) return <Skeleton />;
+export default function AgentCard({ decision, isLoading, fadeDelay = 0 }: AgentCardProps) {
+  if (isLoading) {
+    return <ThinkingSkeleton traderName={decision.traderName} archetype={decision.archetype} />;
+  }
 
   const { traderName, archetype, reasoning, action, size, conviction, error } = decision;
+  const colors = AGENT_COLORS[traderName];
 
   return (
-    <div className="animate-fadeIn flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+    <div
+      className="animate-fadeIn flex flex-col gap-3 rounded-xl border border-zinc-800/60 border-l-2 bg-zinc-900 p-4 panel-depth ring-1 ring-white/5"
+      style={{
+        animationDelay: `${fadeDelay}ms`,
+        borderLeftColor: colors?.hex ?? "#3f3f46",
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -78,7 +146,7 @@ export default function AgentCard({ decision, isLoading }: AgentCardProps) {
             <div className="flex flex-1 items-center gap-2">
               <div className="flex-1 rounded-full bg-zinc-800 h-1.5">
                 <div
-                  className="h-1.5 rounded-full bg-blue-500 transition-all"
+                  className={`h-1.5 rounded-full transition-all ${colors?.bg ?? "bg-blue-500"}`}
                   style={{ width: `${(conviction / 10) * 100}%` }}
                 />
               </div>

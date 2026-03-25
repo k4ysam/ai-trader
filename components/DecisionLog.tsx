@@ -18,7 +18,7 @@ export default function DecisionLog({ events }: DecisionLogProps) {
   if (events.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900 p-4 panel-depth ring-1 ring-white/5">
       <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
         Event Log
       </p>

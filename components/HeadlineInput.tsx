@@ -38,7 +38,7 @@ export default function HeadlineInput({ onSubmit, isLoading, isCooldown = false 
     <div className="flex flex-col gap-3">
       <form onSubmit={handleSubmit} className="flex gap-2">
         <textarea
-          className="flex-1 resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+          className="flex-1 resize-none rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
           rows={2}
           placeholder="Enter a news headline about NVDA... (Enter to submit)"
           value={value}

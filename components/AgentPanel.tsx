@@ -33,7 +33,7 @@ export default function AgentPanel({ decisions, isLoading }: AgentPanelProps) {
 
   if (!decisions) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-dashed border-zinc-700 py-12 text-sm text-zinc-500">
+      <div className="dot-grid-bg flex items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16 text-sm text-zinc-500">
         Submit a headline to see agent decisions
       </div>
     );
@@ -41,8 +41,8 @@ export default function AgentPanel({ decisions, isLoading }: AgentPanelProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {decisions.map((decision) => (
-        <AgentCard key={decision.traderName} decision={decision} isLoading={false} />
+      {decisions.map((decision, index) => (
+        <AgentCard key={decision.traderName} decision={decision} isLoading={false} fadeDelay={index * 100} />
       ))}
     </div>
   );

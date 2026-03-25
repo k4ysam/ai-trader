@@ -104,42 +104,68 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
+    <main className="relative min-h-screen overflow-hidden bg-zinc-950 text-white dot-grid-bg">
+      {/* Ambient radial gradient blobs (hero-3 signature) */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden -z-10">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[400px] w-[700px] rounded-full bg-[radial-gradient(ellipse_at_center,#3b82f620,transparent_70%)] blur-[70px]" />
+        <div className="absolute top-1/3 -left-32 h-[500px] w-[500px] rounded-full bg-[radial-gradient(ellipse_at_center,#a855f715,transparent_70%)] blur-[80px]" />
+        <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-[radial-gradient(ellipse_at_center,#10b98112,transparent_70%)] blur-[80px]" />
+      </div>
+
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">AI Trader Arena</h1>
-            <p className="text-sm text-zinc-500 mt-1">
+            {/* hero-3 pill badge */}
+            <div className="animate-in slide-in-from-bottom-10 fill-mode-backwards delay-100 duration-500 mb-3 flex w-fit items-center gap-2 rounded-sm border border-zinc-800 bg-zinc-900/80 px-2 py-1 shadow-sm backdrop-blur-sm">
+              <span className="rounded-sm border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-xs text-zinc-400">
+                LIVE
+              </span>
+              <span className="text-xs text-zinc-400">AI-powered NVDA trading simulation</span>
+              <span className="block h-3 border-l border-zinc-700" />
+              <svg className="h-3 w-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h1 className="animate-in slide-in-from-bottom-10 fill-mode-backwards delay-200 duration-500 text-2xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              AI Trader Arena
+            </h1>
+            <p className="animate-in slide-in-from-bottom-10 fill-mode-backwards delay-300 duration-500 text-sm text-zinc-500 mt-1">
               Submit a {STOCK_TICKER} headline and watch four AI traders react
             </p>
           </div>
-          <PriceTicker price={currentPrice} previousPrice={previousPrice} />
+          <div className="glass-panel rounded-xl border border-zinc-800/60 px-4 py-2 shrink-0">
+            <PriceTicker price={currentPrice} previousPrice={previousPrice} />
+          </div>
         </div>
 
         {/* Input */}
-        <HeadlineInput onSubmit={handleSubmit} isLoading={isLoading} isCooldown={isCooldown} />
+        <div className="animate-in slide-in-from-bottom-5 fill-mode-backwards delay-500 duration-700">
+          <HeadlineInput onSubmit={handleSubmit} isLoading={isLoading} isCooldown={isCooldown} />
+        </div>
 
         {/* Error banner */}
         {error && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400 backdrop-blur-sm">
             {error}
           </div>
         )}
 
         {/* Partial failure banner */}
         {partialFailure && !error && (
-          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400 backdrop-blur-sm">
             Some agents encountered errors. Results may be incomplete.
           </div>
         )}
 
         {/* Agent cards */}
-        <AgentPanel decisions={latestDecisions} isLoading={isLoading} />
+        <div className="animate-in slide-in-from-bottom-5 fill-mode-backwards delay-700 duration-700">
+          <AgentPanel decisions={latestDecisions} isLoading={isLoading} />
+        </div>
 
         {/* Chart + log side by side on large screens */}
         {(priceHistory.length >= 2 || events.length > 0) && (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="animate-in slide-in-from-bottom-5 fill-mode-backwards delay-1000 duration-1000 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <PriceChart data={priceHistory} />
             <DecisionLog events={events} />
           </div>
