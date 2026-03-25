@@ -25,13 +25,16 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
 
   const r = raw as Record<string, unknown>;
 
-  if (
-    !Array.isArray(r.reasoning) ||
-    r.reasoning.length !== 3 ||
-    !r.reasoning.every((s) => typeof s === "string")
-  ) {
-    throw new Error("reasoning must be an array of exactly 3 strings");
+  if (!Array.isArray(r.reasoning) || r.reasoning.length === 0) {
+    throw new Error("reasoning must be a non-empty array");
   }
+
+  // Normalize: filter to strings, truncate to 3, pad with "..." if fewer than 3.
+  const normalized = r.reasoning
+    .filter((s): s is string => typeof s === "string")
+    .slice(0, 3);
+  while (normalized.length < 3) normalized.push("...");
+  const reasoning = normalized as [string, string, string];
 
   if (!isTradeAction(r.action)) {
     throw new Error(`Invalid action: ${String(r.action)}`);
@@ -52,7 +55,7 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
   }
 
   return {
-    reasoning: r.reasoning as [string, string, string],
+    reasoning,
     action: r.action,
     size: r.size,
     conviction,
@@ -87,6 +90,8 @@ export async function callAgent(
         systemInstruction: personality.systemPrompt,
         maxOutputTokens: 512,
         temperature: 0.7,
+        // Disable thinking mode so the model returns plain JSON, not a reasoning trace.
+        thinkingConfig: { thinkingBudget: 0 },
         // Built-in retry with exponential backoff + jitter on 429/500/503/504.
         httpOptions: { retryOptions: { attempts: 5 } },
       },

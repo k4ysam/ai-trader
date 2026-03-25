@@ -303,12 +303,15 @@ describe("callAgent — error handling", () => {
     expect(typeof result.error).toBe("string");
   });
 
-  it("returns error field when reasoning is not an array of 3, does not throw", async () => {
+  it("normalizes reasoning arrays shorter than 3 by padding with '...', does not throw", async () => {
     mockGenerateContent.mockResolvedValue(
       mockGeminiResponse(validAgentJson({ reasoning: ["only one reason"] }))
     );
     const result = await callAgent(samplePersonality, "Bad news", 500);
-    expect(result.error).toBeDefined();
+    expect(result.error).toBeUndefined();
+    expect(result.reasoning).toHaveLength(3);
+    expect(result.reasoning[1]).toBe("...");
+    expect(result.reasoning[2]).toBe("...");
   });
 
   it("maps RESOURCE_EXHAUSTED errors to a user-friendly rate limit message", async () => {
