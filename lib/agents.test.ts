@@ -5,22 +5,18 @@ import type { TraderPersonality } from "@/types";
 // vi.mock is hoisted above all imports by Vitest. Hoisted mocks must be
 // declared via vi.hoisted() to avoid a temporal dead zone error.
 //
-// Gemini SDK call chain:
-//   new GoogleGenerativeAI(key)
-//     .getGenerativeModel({ model, systemInstruction, generationConfig })
-//     .generateContent(prompt)
-//   → { response: { text: () => string } }
+// @google/genai SDK call chain:
+//   new GoogleGenAI({ apiKey })
+//     .models.generateContent({ model, contents, config })
+//   → GenerateContentResponse where .text getter returns string | undefined
 // ---------------------------------------------------------------------------
 
 const mockGenerateContent = vi.hoisted(() => vi.fn());
-const mockGetGenerativeModel = vi.hoisted(() =>
-  vi.fn().mockReturnValue({ generateContent: mockGenerateContent })
-);
 
-vi.mock("@google/generative-ai", () => ({
-  // Must use a regular function (not arrow) so `new GoogleGenerativeAI()` works as a constructor.
-  GoogleGenerativeAI: vi.fn().mockImplementation(function () {
-    return { getGenerativeModel: mockGetGenerativeModel };
+vi.mock("@google/genai", () => ({
+  // Must use a regular function (not arrow) so `new GoogleGenAI()` works as a constructor.
+  GoogleGenAI: vi.fn().mockImplementation(function () {
+    return { models: { generateContent: mockGenerateContent } };
   }),
 }));
 
@@ -36,7 +32,8 @@ import {
 // ---------------------------------------------------------------------------
 
 function mockGeminiResponse(text: string) {
-  return { response: { text: () => text } };
+  // Mirrors GenerateContentResponse: .text is a getter returning string | undefined.
+  return { text };
 }
 
 function validAgentJson(overrides: Record<string, unknown> = {}): string {
@@ -126,8 +123,6 @@ describe("callAgent — happy path", () => {
   beforeEach(() => {
     vi.stubEnv("GEMINI_API_KEY", "test-key-dummy");
     mockGenerateContent.mockReset();
-    mockGetGenerativeModel.mockReset();
-    mockGetGenerativeModel.mockReturnValue({ generateContent: mockGenerateContent });
   });
 
   it("returns an AgentDecision with traderName from the personality", async () => {
@@ -206,45 +201,49 @@ describe("callAgent — happy path", () => {
     expect(result.action).toBe("BUY");
   });
 
-  it("calls the SDK with model gemini-2.0-flash", async () => {
+  it("calls the SDK with model gemini-2.5-flash", async () => {
     mockGenerateContent.mockResolvedValue(mockGeminiResponse(validAgentJson()));
     await callAgent(samplePersonality, "NVDA beats earnings", 500);
-    expect(mockGetGenerativeModel).toHaveBeenCalledOnce();
-    const callArg = mockGetGenerativeModel.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg.model).toBe("gemini-2.0-flash");
+    expect(mockGenerateContent).toHaveBeenCalledOnce();
+    const callArg = mockGenerateContent.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.model).toBe("gemini-2.5-flash");
   });
 
   it("calls the SDK with temperature 0.7", async () => {
     mockGenerateContent.mockResolvedValue(mockGeminiResponse(validAgentJson()));
     await callAgent(samplePersonality, "NVDA beats earnings", 500);
-    const callArg = mockGetGenerativeModel.mock.calls[0][0] as {
-      generationConfig: { temperature: number };
+    const callArg = mockGenerateContent.mock.calls[0][0] as {
+      config: { temperature: number };
     };
-    expect(callArg.generationConfig.temperature).toBe(0.7);
+    expect(callArg.config.temperature).toBe(0.7);
   });
 
   it("calls the SDK with maxOutputTokens 512", async () => {
     mockGenerateContent.mockResolvedValue(mockGeminiResponse(validAgentJson()));
     await callAgent(samplePersonality, "NVDA beats earnings", 500);
-    const callArg = mockGetGenerativeModel.mock.calls[0][0] as {
-      generationConfig: { maxOutputTokens: number };
+    const callArg = mockGenerateContent.mock.calls[0][0] as {
+      config: { maxOutputTokens: number };
     };
-    expect(callArg.generationConfig.maxOutputTokens).toBe(512);
+    expect(callArg.config.maxOutputTokens).toBe(512);
   });
 
   it("includes the headline in the user message", async () => {
     const headline = "NVDA crushes Q4 earnings";
     mockGenerateContent.mockResolvedValue(mockGeminiResponse(validAgentJson()));
     await callAgent(samplePersonality, headline, 500);
-    const prompt = mockGenerateContent.mock.calls[0][0] as string;
-    expect(prompt).toContain(headline);
+    const callArg = mockGenerateContent.mock.calls[0][0] as {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+    };
+    expect(callArg.contents[0].parts[0].text).toContain(headline);
   });
 
   it("includes the current price in the user message", async () => {
     mockGenerateContent.mockResolvedValue(mockGeminiResponse(validAgentJson()));
     await callAgent(samplePersonality, "NVDA crushes Q4 earnings", 875.5);
-    const prompt = mockGenerateContent.mock.calls[0][0] as string;
-    expect(prompt).toContain("875.5");
+    const callArg = mockGenerateContent.mock.calls[0][0] as {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+    };
+    expect(callArg.contents[0].parts[0].text).toContain("875.5");
   });
 });
 
@@ -256,8 +255,6 @@ describe("callAgent — error handling", () => {
   beforeEach(() => {
     vi.stubEnv("GEMINI_API_KEY", "test-key-dummy");
     mockGenerateContent.mockReset();
-    mockGetGenerativeModel.mockReset();
-    mockGetGenerativeModel.mockReturnValue({ generateContent: mockGenerateContent });
   });
 
   it("returns error field when action is invalid, does not throw", async () => {
@@ -313,6 +310,14 @@ describe("callAgent — error handling", () => {
     const result = await callAgent(samplePersonality, "Bad news", 500);
     expect(result.error).toBeDefined();
   });
+
+  it("maps RESOURCE_EXHAUSTED errors to a user-friendly rate limit message", async () => {
+    mockGenerateContent.mockRejectedValue(
+      new Error("429 RESOURCE_EXHAUSTED: Quota exceeded")
+    );
+    const result = await callAgent(samplePersonality, "Bad news", 500);
+    expect(result.error).toBe("Rate limit reached — please wait a moment and try again");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -323,8 +328,6 @@ describe("analyzeHeadline", () => {
   beforeEach(() => {
     vi.stubEnv("GEMINI_API_KEY", "test-key-dummy");
     mockGenerateContent.mockReset();
-    mockGetGenerativeModel.mockReset();
-    mockGetGenerativeModel.mockReturnValue({ generateContent: mockGenerateContent });
   });
 
   it("returns exactly 4 decisions", async () => {

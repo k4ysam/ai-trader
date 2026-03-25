@@ -81,6 +81,15 @@ export default function Home() {
       setCurrentPrice(newPrice);
       setPriceHistory((prev) => [...prev, { time: timeLabel, price: newPrice }]);
       setEvents((prev) => [...prev, event]);
+      // If every agent hit a rate limit, surface a clear message instead of 4 error cards.
+      const allRateLimited = decisions.every((d) =>
+        d.error?.includes("Rate limit")
+      );
+      if (allRateLimited) {
+        setError("Gemini rate limit reached. Please wait 15–60 seconds and try again.");
+        return;
+      }
+
       setLatestDecisions(decisions);
       setPartialFailure(data.partialFailure);
 

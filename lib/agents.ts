@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import type {
   AgentDecision,
   AgentRawResponse,
@@ -59,6 +59,8 @@ function validateRawResponse(raw: unknown): AgentRawResponse {
   };
 }
 
+const INTER_CALL_DELAY_MS = 300;
+
 export async function callAgent(
   personality: (typeof TRADER_PERSONALITIES)[number],
   headline: string,
@@ -75,16 +77,22 @@ export async function callAgent(
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
+    const ai = new GoogleGenAI({ apiKey });
+    const userMessage = `NVDA is currently at $${currentPrice}. Headline: ${headline}`;
+
+    const result = await ai.models.generateContent({
       model: MODEL_ID,
-      systemInstruction: personality.systemPrompt,
-      generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      config: {
+        systemInstruction: personality.systemPrompt,
+        maxOutputTokens: 512,
+        temperature: 0.7,
+        // Built-in retry with exponential backoff + jitter on 429/500/503/504.
+        httpOptions: { retryOptions: { attempts: 5 } },
+      },
     });
 
-    const userMessage = `NVDA is currently at $${currentPrice}. Headline: ${headline}`;
-    const result = await model.generateContent(userMessage);
-    const text = result.response.text();
+    const text = result.text ?? "";
 
     // Trim first so leading/trailing whitespace doesn't prevent fence detection.
     const trimmed = text.trim();
@@ -110,7 +118,12 @@ export async function callAgent(
       ...validated,
     };
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unexpected error";
+    const rawMsg = error instanceof Error ? error.message : "Unexpected error";
+    const isRateLimit =
+      rawMsg.includes("RESOURCE_EXHAUSTED") || rawMsg.includes("429");
+    const msg = isRateLimit
+      ? "Rate limit reached — please wait a moment and try again"
+      : rawMsg;
     return {
       traderName: personality.name,
       archetype: personality.archetype,
@@ -127,29 +140,13 @@ export async function analyzeHeadline(
   headline: string,
   currentPrice: number
 ): Promise<{ decisions: AgentDecision[]; partialFailure: boolean }> {
-  const results = await Promise.allSettled(
-    TRADER_PERSONALITIES.map((p) => callAgent(p, headline, currentPrice))
-  );
+  const decisions: AgentDecision[] = [];
 
-  const decisions: AgentDecision[] = results.map((result, i) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-    const personality = TRADER_PERSONALITIES[i];
-    const msg =
-      result.reason instanceof Error ? result.reason.message : "Unknown error";
-    return {
-      traderName: personality.name,
-      archetype: personality.archetype,
-      reasoning: ["Error", "Error", "Error"],
-      action: "HOLD",
-      size: "small",
-      conviction: 1,
-      error: msg,
-    };
-  });
+  for (const [i, personality] of TRADER_PERSONALITIES.entries()) {
+    if (i > 0) await new Promise<void>((r) => setTimeout(r, INTER_CALL_DELAY_MS));
+    decisions.push(await callAgent(personality, headline, currentPrice));
+  }
 
   const partialFailure = decisions.some((d) => d.error != null);
-
   return { decisions, partialFailure };
 }
