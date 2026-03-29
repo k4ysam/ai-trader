@@ -1,36 +1,31 @@
-import { StreamManager } from "@/lib/market/stream-manager"
-import type { MarketTick } from "@/types"
+import { Orchestrator } from "@/lib/orchestrator"
+import { StateBroadcaster } from "@/lib/state-broadcaster"
+import type { SimState } from "@/types"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request): Promise<Response> {
+  const encoder = new TextEncoder()
+
   const stream = new ReadableStream({
     start(controller) {
-      const encoder = new TextEncoder()
-
-      function send(event: string, data: unknown): void {
-        const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+      function send(data: SimState): void {
+        const payload = `data: ${JSON.stringify(data)}\n\n`
         controller.enqueue(encoder.encode(payload))
       }
 
-      // Send initial keepalive so the connection is established immediately
-      controller.enqueue(encoder.encode(": keepalive\n\n"))
+      // Send current state immediately on connect
+      send(Orchestrator.getInstance().getState())
 
-      const manager = StreamManager.getInstance()
+      const unsubscribe = StateBroadcaster.getInstance().subscribe(send)
 
-      function onTick(tick: MarketTick): void {
-        send("tick", tick)
-      }
-
-      manager.on("tick", onTick)
-
-      // Heartbeat every 15s to keep proxies from closing the connection
+      // Heartbeat every 15s to keep proxies alive
       const heartbeat = setInterval(() => {
         controller.enqueue(encoder.encode(": keepalive\n\n"))
       }, 15_000)
 
       request.signal.addEventListener("abort", () => {
-        manager.off("tick", onTick)
+        unsubscribe()
         clearInterval(heartbeat)
         controller.close()
       })
