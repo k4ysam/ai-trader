@@ -15,6 +15,7 @@ import { callAIBot, createAIBotConfig, createGeminiGenerateFn } from "@/lib/bots
 import { createThrottle } from "@/lib/bots/throttle"
 import { StateBroadcaster } from "@/lib/state-broadcaster"
 import { StreamManager } from "@/lib/market/stream-manager"
+import { ReplayEngine } from "@/lib/market/replay-engine"
 import type {
   BotConfig,
   BotState,
@@ -23,6 +24,8 @@ import type {
   MarketTick,
   Order,
   PriceBar,
+  ReplaySpeed,
+  SimMode,
   SimState,
   SimStatus,
   Ticker,
@@ -51,6 +54,7 @@ export class Orchestrator extends EventEmitter {
   private state: SimState
   private aiThrottle = createThrottle(AI_BOT_CADENCE_MS)
   private geminiGenerateFn = this.buildGeminiFn()
+  private mode: SimMode = "live"
 
   constructor() {
     super()
@@ -79,19 +83,35 @@ export class Orchestrator extends EventEmitter {
   pause(): void {
     if (this.state.status !== "running") return
     this.state = { ...this.state, status: "paused" }
-    StreamManager.getInstance().off("tick", this.onTick)
+    if (this.mode === "replay") {
+      ReplayEngine.getInstance().pause()
+    } else {
+      StreamManager.getInstance().off("tick", this.onTick)
+    }
     this.broadcast()
   }
 
   resume(): void {
     if (this.state.status !== "paused") return
     this.state = { ...this.state, status: "running" }
-    StreamManager.getInstance().on("tick", this.onTick)
+    if (this.mode === "replay") {
+      ReplayEngine.getInstance().resume()
+    } else {
+      StreamManager.getInstance().on("tick", this.onTick)
+    }
     this.broadcast()
   }
 
   reset(): void {
-    StreamManager.getInstance().off("tick", this.onTick)
+    if (this.mode === "replay") {
+      const engine = ReplayEngine.getInstance()
+      engine.reset()
+      engine.off("tick", this.onTick)
+      engine.off("complete", this.onReplayComplete)
+      this.mode = "live"
+    } else {
+      StreamManager.getInstance().off("tick", this.onTick)
+    }
     this.state = this.buildInitialState()
     this.broadcast()
   }
@@ -133,6 +153,46 @@ export class Orchestrator extends EventEmitter {
       ),
     }
     this.broadcast()
+  }
+
+  async startReplay(speed: ReplaySpeed = 1, date?: string): Promise<void> {
+    if (this.state.status === "running") return
+    this.mode = "replay"
+
+    const engine = ReplayEngine.getInstance()
+    await engine.load(this.state.watchlist, date)
+
+    engine.on("tick", this.onTick)
+    engine.once("complete", this.onReplayComplete)
+    engine.play(speed)
+
+    const progress = engine.getProgress()
+    this.state = {
+      ...this.state,
+      status: "running",
+      startedAt: Date.now(),
+      replay: {
+        mode: "replay",
+        speed,
+        replayDate: progress.replayDate,
+        replayTimestamp: progress.replayTimestamp,
+        barIndex: progress.barIndex,
+        totalBars: progress.totalBars,
+        isComplete: false,
+      },
+    }
+    this.broadcast()
+  }
+
+  setReplaySpeed(speed: ReplaySpeed): void {
+    if (this.mode === "replay") {
+      ReplayEngine.getInstance().setSpeed(speed)
+      this.state = {
+        ...this.state,
+        replay: { ...this.state.replay, speed },
+      }
+      this.broadcast()
+    }
   }
 
   // ─── Tick handler ────────────────────────────────────────────────────────────
@@ -234,6 +294,17 @@ export class Orchestrator extends EventEmitter {
       snapshots: { ...this.state.snapshots, [ticker]: newSnapshot },
       tickCount: this.state.tickCount + 1,
     }
+    if (this.mode === "replay") {
+      const progress = ReplayEngine.getInstance().getProgress()
+      this.state = {
+        ...this.state,
+        replay: {
+          ...this.state.replay,
+          replayTimestamp: progress.replayTimestamp,
+          barIndex: progress.barIndex,
+        },
+      }
+    }
     this.broadcast()
 
     // 6. Fire AI bot async (fire-and-forget, throttled per ticker)
@@ -297,6 +368,25 @@ export class Orchestrator extends EventEmitter {
         // AI errors are non-fatal — just continue
       })
     }
+  }
+
+  // ─── Replay event handlers ───────────────────────────────────────────────────
+
+  private onReplayComplete = (): void => {
+    const engine = ReplayEngine.getInstance()
+    engine.off("tick", this.onTick)
+    const progress = engine.getProgress()
+    this.state = {
+      ...this.state,
+      status: "paused",
+      replay: {
+        ...this.state.replay,
+        barIndex: progress.barIndex,
+        totalBars: progress.totalBars,
+        isComplete: true,
+      },
+    }
+    this.broadcast()
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
