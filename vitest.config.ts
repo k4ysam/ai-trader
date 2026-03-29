@@ -3,10 +3,13 @@ import { resolve } from "path";
 
 export default defineConfig({
   test: {
-    // Component tests use jsdom; lib/api tests use node.
-    // Per-file environment overrides via @vitest-environment docblock.
     globals: true,
     environment: "node",
+    exclude: [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/.claude/**",
+    ],
     coverage: {
       provider: "v8",
       include: ["lib/**"],
