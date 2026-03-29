@@ -6,6 +6,9 @@ import SentimentGauge from "./SentimentGauge"
 import StrategyBreakdown from "./StrategyBreakdown"
 import CommunityTradeFeed from "./CommunityTradeFeed"
 import PnLDistribution from "./PnLDistribution"
+import CommunityTimeline from "./CommunityTimeline"
+import CommunityComparison from "./CommunityComparison"
+import ConvictionHeatmap from "./ConvictionHeatmap"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,13 +17,16 @@ interface CommunityPanelProps {
   userBots: BotState[]
 }
 
-type Tab = "sentiment" | "strategies" | "pnl" | "feed"
+type Tab = "sentiment" | "strategies" | "pnl" | "feed" | "history" | "compare" | "heatmap"
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "sentiment", label: "Sentiment" },
   { id: "strategies", label: "Strategies" },
   { id: "pnl", label: "P&L" },
   { id: "feed", label: "Live Feed" },
+  { id: "history", label: "History" },
+  { id: "compare", label: "Compare" },
+  { id: "heatmap", label: "Heatmap" },
 ]
 
 // ─── CommunityPanel ───────────────────────────────────────────────────────────
@@ -86,11 +92,19 @@ export default function CommunityPanel({ selectedTicker, userBots }: CommunityPa
           <h2 className="text-sm font-semibold text-white tracking-tight">
             Community Intelligence
           </h2>
-          {/* Simulated data badge */}
-          <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
-            SIMULATED DATA
-          </span>
+          {/* Simulated data badge — shown when community is not live */}
+          {process.env.NEXT_PUBLIC_COMMUNITY_ENABLED !== "true" && (
+            <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
+              SIMULATED DATA
+            </span>
+          )}
+          {process.env.NEXT_PUBLIC_COMMUNITY_ENABLED === "true" && (
+            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-xs text-emerald-400">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE
+            </span>
+          )}
         </div>
 
         {/* Community stats */}
@@ -162,6 +176,24 @@ export default function CommunityPanel({ selectedTicker, userBots }: CommunityPa
 
             {activeTab === "feed" && (
               <CommunityTradeFeed trades={sortedTrades} />
+            )}
+
+            {activeTab === "history" && (
+              <CommunityTimeline ticker={selectedTicker} />
+            )}
+
+            {activeTab === "compare" && aggregate && (
+              <CommunityComparison aggregate={aggregate} userBots={userBots} />
+            )}
+            {activeTab === "compare" && !aggregate && (
+              <EmptyState message="No community data to compare against yet." />
+            )}
+
+            {activeTab === "heatmap" && communityState && (
+              <ConvictionHeatmap communityState={communityState} />
+            )}
+            {activeTab === "heatmap" && !communityState && (
+              <EmptyState message="No data yet." />
             )}
           </>
         )}
