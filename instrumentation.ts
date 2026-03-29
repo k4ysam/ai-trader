@@ -9,4 +9,8 @@ export async function register() {
   if (process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET) {
     orchestrator.start()
   }
+
+  // Start community simulator (Phase 1 — simulated community data)
+  const { CommunitySimulator } = await import("@/lib/community/simulator")
+  CommunitySimulator.getInstance().start()
 }
