@@ -6,11 +6,16 @@ import type { AnonymousTrade, BotType, CommunityBotSnapshot, Ticker, TradeAction
 const SESSION_KEY = (sessionId: string) => `comm:sess:${sessionId}`
 const TRADES_KEY = "comm:trades"
 const RATE_LIMIT_KEY = (sessionId: string) => `comm:rl:${sessionId}`
-const SESSION_TTL = 300 // seconds — auto-expire idle sessions after 5 min
+const IP_RATE_LIMIT_KEY = (ip: string) => `comm:ip:${ip}`
+const TRADE_DEDUP_KEY = (fingerprint: string) => `comm:td:${fingerprint}`
+const SESSION_TTL = 300      // seconds — auto-expire idle sessions after 5 min
 const TRADES_MAX = 200
-const RATE_LIMIT_TTL = 5 // seconds between heartbeats per session
+const RATE_LIMIT_TTL = 5     // seconds between heartbeats per session
+const IP_RATE_LIMIT_TTL = 60 // 1-minute window for IP rate limit
+const IP_RATE_LIMIT_MAX = 60 // max requests per IP per minute
+const TRADE_DEDUP_TTL = 30   // seconds — dedup window for global trade fingerprints
 
-// ─── Lazy singleton ───────────────────────────────────────────────────────────
+// ─── Module-level singleton (M-4) ────────────────────────────────────────────
 
 let _redis: Redis | null = null
 
@@ -26,6 +31,13 @@ function getRedis(): Redis {
   return _redis
 }
 
+// Module-level store instance so route handlers don't re-construct on every request (M-4)
+let _store: RedisStore | null = null
+export function getStore(): RedisStore {
+  if (!_store) _store = new RedisStore()
+  return _store
+}
+
 // ─── Type guards / serialisation ─────────────────────────────────────────────
 
 const VALID_ACTIONS = new Set<string>(["BUY", "SELL", "HOLD"])
@@ -33,18 +45,20 @@ const VALID_BOT_TYPES = new Set<string>([
   "rsi", "sma-crossover", "momentum", "mean-reversion", "ai", "custom",
 ])
 
+const TICKER_RE = /^[A-Z]{1,10}$/
+
 function parseSnapshot(raw: unknown): CommunityBotSnapshot | null {
   if (typeof raw !== "object" || raw === null) return null
   const r = raw as Record<string, unknown>
   if (
-    typeof r.sessionId !== "string" ||
+    typeof r.sessionId !== "string" || !/^[a-zA-Z0-9_-]{8,64}$/.test(r.sessionId) ||
     typeof r.botType !== "string" || !VALID_BOT_TYPES.has(r.botType) ||
-    typeof r.ticker !== "string" ||
+    typeof r.ticker !== "string" || !TICKER_RE.test(r.ticker) ||
     typeof r.lastAction !== "string" || !VALID_ACTIONS.has(r.lastAction) ||
-    typeof r.confidence !== "number" ||
-    typeof r.pnlPct !== "number" ||
-    typeof r.lastTradeTimestamp !== "number" ||
-    typeof r.timestamp !== "number"
+    typeof r.confidence !== "number" || r.confidence < 0 || r.confidence > 1 ||
+    typeof r.pnlPct !== "number" || r.pnlPct < -500 || r.pnlPct > 500 ||
+    typeof r.lastTradeTimestamp !== "number" || r.lastTradeTimestamp <= 0 ||
+    typeof r.timestamp !== "number" || r.timestamp <= 0
   ) return null
 
   return {
@@ -99,6 +113,15 @@ export interface CommunityStore {
 
   /** Returns true if the request is allowed (false = rate limited). */
   checkRateLimit(sessionId: string): Promise<boolean>
+
+  /** IP-level rate limit: true = allowed, false = blocked. */
+  checkIpRateLimit(ip: string): Promise<boolean>
+
+  /**
+   * Returns true and marks the trade as seen if this fingerprint hasn't been
+   * written in the last 30 s. Returns false if it's a duplicate.
+   */
+  isTradeNew(fingerprint: string): Promise<boolean>
 }
 
 // ─── RedisStore ───────────────────────────────────────────────────────────────
@@ -186,9 +209,26 @@ export class RedisStore implements CommunityStore {
 
   async checkRateLimit(sessionId: string): Promise<boolean> {
     const key = RATE_LIMIT_KEY(sessionId)
-    // SET NX EX: only sets if key doesn't exist. Returns "OK" if set, null if already exists.
     const result = await this.redis.set(key, 1, { nx: true, ex: RATE_LIMIT_TTL })
-    return result !== null // true = allowed, false = rate limited
+    return result !== null
+  }
+
+  async checkIpRateLimit(ip: string): Promise<boolean> {
+    const key = IP_RATE_LIMIT_KEY(ip)
+    // INCR + EXPIRE pattern: count requests in a fixed 1-minute window
+    const pipeline = this.redis.pipeline()
+    pipeline.incr(key)
+    pipeline.expire(key, IP_RATE_LIMIT_TTL)
+    const results = await pipeline.exec()
+    const count = results[0] as number
+    return count <= IP_RATE_LIMIT_MAX
+  }
+
+  async isTradeNew(fingerprint: string): Promise<boolean> {
+    const key = TRADE_DEDUP_KEY(fingerprint)
+    // SET NX EX: true = this fingerprint is new (allowed), false = duplicate
+    const result = await this.redis.set(key, 1, { nx: true, ex: TRADE_DEDUP_TTL })
+    return result !== null
   }
 }
 
