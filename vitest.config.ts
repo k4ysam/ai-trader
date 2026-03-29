@@ -10,7 +10,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["lib/**"],
-      exclude: ["lib/agents.ts", "lib/rate-limit.ts"],
+      exclude: ["lib/constants.ts"],
       thresholds: { lines: 80, functions: 80, branches: 80 },
     },
     setupFiles: ["./vitest.setup.ts"],
