@@ -111,6 +111,19 @@ export interface SSEEvent {
 
 export type SimStatus = "idle" | "running" | "paused"
 
+export type SimMode = "live" | "replay"
+export type ReplaySpeed = 1 | 5 | 10 | 50
+
+export interface ReplayState {
+  mode: SimMode
+  speed: ReplaySpeed
+  replayDate: string | null        // "YYYY-MM-DD" of the data being replayed
+  replayTimestamp: number | null   // current simulated epoch ms
+  barIndex: number
+  totalBars: number
+  isComplete: boolean
+}
+
 export interface SimState {
   status: SimStatus
   bots: BotState[]
@@ -119,6 +132,7 @@ export interface SimState {
   priceHistory: Record<Ticker, PriceBar[]>
   tickCount: number
   startedAt: number | null
+  replay: ReplayState
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
