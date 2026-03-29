@@ -192,3 +192,14 @@ export interface CommunityState {
   totalActiveBots: number
   broadcastAt: number
 }
+
+// ─── Community History (Phase 3) ──────────────────────────────────────────────
+
+/** One time-bucketed sentiment snapshot for a ticker, returned by the history route. */
+export interface HistoryPoint {
+  timestamp: number   // ms unix
+  bullPct: number
+  bearPct: number
+  holdPct: number
+  totalBots: number
+}

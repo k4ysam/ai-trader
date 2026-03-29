@@ -19,4 +19,8 @@ export async function register() {
     const { CommunitySimulator } = await import("@/lib/community/simulator")
     CommunitySimulator.getInstance().start()
   }
+
+  // Start history writer — persists aggregates to Postgres every 60s (no-op without DATABASE_URL)
+  const { HistoryWriter } = await import("@/lib/community/history-writer")
+  HistoryWriter.getInstance().start()
 }
