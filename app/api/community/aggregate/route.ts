@@ -1,11 +1,17 @@
 import { CommunityBroadcaster } from "@/lib/community/broadcaster"
 import { CommunitySimulator } from "@/lib/community/simulator"
+import { CommunityAggregator } from "@/lib/community/community-aggregator"
+import { isRedisConfigured } from "@/lib/community/store"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(): Promise<Response> {
-  // Ensure simulator is running before responding
-  CommunitySimulator.getInstance().start()
+  // Ensure appropriate engine is running
+  if (isRedisConfigured()) {
+    CommunityAggregator.getInstance().start()
+  } else {
+    CommunitySimulator.getInstance().start()
+  }
 
   const state = CommunityBroadcaster.getInstance().getLastState()
 

@@ -1,12 +1,18 @@
 import { CommunitySimulator } from "@/lib/community/simulator"
 import { CommunityBroadcaster } from "@/lib/community/broadcaster"
+import { CommunityAggregator } from "@/lib/community/community-aggregator"
+import { isRedisConfigured } from "@/lib/community/store"
 import type { CommunityState } from "@/types"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request): Promise<Response> {
-  // Ensure simulator is ticking (idempotent — safe to call on every connection)
-  CommunitySimulator.getInstance().start()
+  // Use real Redis aggregation when configured, simulator otherwise
+  if (isRedisConfigured()) {
+    CommunityAggregator.getInstance().start()
+  } else {
+    CommunitySimulator.getInstance().start()
+  }
 
   const encoder = new TextEncoder()
 

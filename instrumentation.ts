@@ -10,7 +10,13 @@ export async function register() {
     orchestrator.start()
   }
 
-  // Start community simulator (Phase 1 — simulated community data)
-  const { CommunitySimulator } = await import("@/lib/community/simulator")
-  CommunitySimulator.getInstance().start()
+  // Start community engine: real Redis aggregation when configured, simulator otherwise
+  const { isRedisConfigured } = await import("@/lib/community/store")
+  if (isRedisConfigured()) {
+    const { CommunityAggregator } = await import("@/lib/community/community-aggregator")
+    CommunityAggregator.getInstance().start()
+  } else {
+    const { CommunitySimulator } = await import("@/lib/community/simulator")
+    CommunitySimulator.getInstance().start()
+  }
 }
