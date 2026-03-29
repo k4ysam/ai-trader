@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import type { SimState, BotType } from "@/types"
+import type { SimState, BotType, SimMode, ReplaySpeed } from "@/types"
 import SimControls from "@/components/SimControls"
 import WatchlistBar from "@/components/WatchlistBar"
 import BotLeaderboard from "@/components/BotLeaderboard"
@@ -16,6 +16,8 @@ export default function Home() {
   const [selectedTicker, setSelectedTicker] = useState<string>("NVDA")
   const [showImporter, setShowImporter] = useState(false)
   const [sseError, setSseError] = useState(false)
+  const [mode, setMode] = useState<SimMode>("live")
+  const [replaySpeed, setReplaySpeed] = useState<ReplaySpeed>(1)
 
   // ─── SSE connection ───────────────────────────────────────────────────────
 
@@ -53,9 +55,22 @@ export default function Home() {
 
   // ─── Sim controls ─────────────────────────────────────────────────────────
 
-  const post = useCallback((path: string) => {
-    fetch(path, { method: "POST" }).catch(() => null)
+  const post = useCallback((path: string, body?: unknown) => {
+    fetch(path, {
+      method: "POST",
+      ...(body !== undefined
+        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        : {}),
+    }).catch(() => null)
   }, [])
+
+  const handleSpeedChange = useCallback(
+    (speed: ReplaySpeed) => {
+      setReplaySpeed(speed)
+      post("/api/sim/replay-speed", { speed })
+    },
+    [post],
+  )
 
   // ─── Bot import ───────────────────────────────────────────────────────────
 
@@ -126,10 +141,15 @@ export default function Home() {
               status={simState.status}
               tickCount={simState.tickCount}
               startedAt={simState.startedAt}
-              onStart={() => post("/api/sim/start")}
+              onStart={() => post("/api/sim/start", { mode, speed: replaySpeed })}
               onPause={() => post("/api/sim/pause")}
               onResume={() => post("/api/sim/resume")}
               onReset={() => post("/api/sim/reset")}
+              mode={mode}
+              onModeChange={setMode}
+              replaySpeed={replaySpeed}
+              onSpeedChange={handleSpeedChange}
+              replay={simState.replay}
             />
           </div>
         )}
