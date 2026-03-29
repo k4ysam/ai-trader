@@ -316,6 +316,15 @@ export class Orchestrator extends EventEmitter {
       priceHistory: {},
       tickCount: 0,
       startedAt: null,
+      replay: {
+        mode: "live",
+        speed: 1,
+        replayDate: null,
+        replayTimestamp: null,
+        barIndex: 0,
+        totalBars: 0,
+        isComplete: false,
+      },
     }
   }
 
