@@ -136,3 +136,82 @@ export async function getBars(
   }
   return result
 }
+
+// Fetches bars for a specific date range. start/end are ISO-8601 strings.
+// e.g. start="2025-03-28T09:30:00-04:00" end="2025-03-28T16:00:00-04:00"
+export async function getBarsByDateRange(
+  ticker: Ticker,
+  start: string,
+  end: string
+): Promise<PriceBar[]> {
+  const result: PriceBar[] = []
+  let nextPageToken: string | null = null
+
+  do {
+    const baseUrl = `${ALPACA_DATA_BASE_URL}/v2/stocks/${encodeURIComponent(ticker)}/bars?timeframe=1Min&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&feed=iex&limit=10000`
+    const url = nextPageToken
+      ? `${baseUrl}&page_token=${encodeURIComponent(nextPageToken)}`
+      : baseUrl
+
+    const res = await fetch(url, { headers: getAuthHeaders() })
+
+    if (!res.ok) {
+      throw new Error(
+        `Alpaca bars request failed: ${res.status} ${res.statusText}`
+      )
+    }
+
+    const body: unknown = await res.json()
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !Array.isArray((body as Record<string, unknown>).bars)
+    ) {
+      throw new Error("Unexpected bars response shape")
+    }
+
+    const typedBody = body as { bars: unknown[]; next_page_token?: string | null }
+    for (const raw of typedBody.bars) {
+      try {
+        result.push(parseBar(raw))
+      } catch {
+        // Skip malformed bars
+      }
+    }
+
+    nextPageToken = typedBody.next_page_token ?? null
+  } while (nextPageToken !== null)
+
+  return result
+}
+
+// Returns the most recent trading day as "YYYY-MM-DD" by fetching 1 daily bar
+export async function getLastTradingDay(): Promise<string> {
+  const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/NVDA/bars?timeframe=1Day&limit=1&feed=iex`
+
+  const res = await fetch(url, { headers: getAuthHeaders() })
+
+  if (!res.ok) {
+    throw new Error(
+      `Alpaca bars request failed: ${res.status} ${res.statusText}`
+    )
+  }
+
+  const body: unknown = await res.json()
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !Array.isArray((body as Record<string, unknown>).bars)
+  ) {
+    throw new Error("Unexpected bars response shape")
+  }
+
+  const bars = (body as { bars: unknown[] }).bars
+  if (bars.length === 0) {
+    throw new Error("No trading day bars returned")
+  }
+
+  const parsed = alpacaBarSchema.parse(bars[0])
+  // Return just the date portion "YYYY-MM-DD" from the ISO timestamp
+  return parsed.t.slice(0, 10)
+}
