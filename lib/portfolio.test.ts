@@ -17,6 +17,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     qty: 10,
     price: 100,
     timestamp: Date.now(),
+    confidence: 0.8,
     ...overrides,
   }
 }

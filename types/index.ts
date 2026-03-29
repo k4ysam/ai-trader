@@ -40,6 +40,7 @@ export interface Order {
   qty: number // shares
   price: number // execution price
   timestamp: number
+  confidence: number // 0–1, from strategy signal
   reasoning?: string // AI bot only
 }
 
@@ -138,4 +139,56 @@ export interface UpdateBotParamsPayload {
 export interface ApiError {
   error: string
   code?: string
+}
+
+// ─── Community Layer ──────────────────────────────────────────────────────────
+
+/** Anonymous snapshot published by one browser session for one bot × ticker. */
+export interface CommunityBotSnapshot {
+  sessionId: string
+  botType: BotType
+  ticker: Ticker
+  lastAction: TradeAction
+  confidence: number          // 0–1
+  pnlPct: number              // rounded to nearest 0.5 to prevent fingerprinting
+  lastTradeTimestamp: number  // ms unix of most recent trade — used for server-side dedup
+  timestamp: number           // ms unix of this heartbeat — used for TTL eviction
+}
+
+/** Per-strategy slice within a CommunityAggregate. */
+export interface StrategySlice {
+  count: number
+  bullPct: number
+  medianPnlPct: number
+}
+
+/** One anonymous trade entry in the community trade feed. */
+export interface AnonymousTrade {
+  ticker: Ticker
+  action: TradeAction
+  botType: BotType
+  confidence: number
+  timestamp: number
+}
+
+/** Server-computed rollup for one ticker, broadcast to all clients. */
+export interface CommunityAggregate {
+  ticker: Ticker
+  totalBots: number
+  bullPct: number
+  bearPct: number
+  holdPct: number
+  byStrategy: Partial<Record<BotType, StrategySlice>>
+  pnlPercentiles: { p25: number; p50: number; p75: number; p90: number }
+  convictionBuckets: number[]   // 10 buckets covering [0,0.1) … [0.9,1.0]
+  recentTrades: AnonymousTrade[]
+  lastUpdated: number
+}
+
+/** Top-level state pushed over /api/community/stream every 5 s. */
+export interface CommunityState {
+  aggregates: Partial<Record<Ticker, CommunityAggregate>>
+  totalActiveSessions: number
+  totalActiveBots: number
+  broadcastAt: number
 }
