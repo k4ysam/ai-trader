@@ -1,14 +1,16 @@
 # AI Trader
 
-A Next.js single-page app where four AI trader agents analyze NVDA headlines and produce BUY/SELL/HOLD decisions that drive a simulated price engine.
+A Next.js paper trading simulation where AI and rule-based bots trade real stocks with fake money against live market data — with a **Replay Mode** to test against historical data on weekends or after-hours.
 
 ## Overview
 
-- **Four AI agents** with distinct trader personalities call the Gemini API and independently analyze each headline
-- **Price engine** aggregates agent decisions (weighted by conviction) to move a simulated NVDA price
-- **Live chart** tracks price history; a decision log records every agent call
+- **5 trading bots** — RSI Ranger, Trend Rider (SMA Crossover), Mo Mentum, The Reverser (Mean Reversion), and ARIA (AI/Gemini) — each starting with $100,000
+- **Live mode** — streams real-time 1-minute ticks from Alpaca's IEX WebSocket feed
+- **Replay mode** — replays any past trading day's 1-minute bars at 1×/5×/10×/50× speed; works on weekends/after-hours with no live feed required
+- **Watchlist** — NVDA, AAPL, TSLA, MSFT, AMD tracked simultaneously
+- **Leaderboard** tracks each bot's portfolio value, P&L, and trade history in real time
 
-**Stack**: Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Recharts · `@google/genai`
+**Stack**: Next.js (App Router) · TypeScript · Tailwind CSS · Recharts · `@google/genai` · Alpaca Markets API
 
 ---
 
@@ -17,7 +19,8 @@ A Next.js single-page app where four AI trader agents analyze NVDA headlines and
 ### Prerequisites
 
 - Node.js 20+
-- A [Google AI Studio](https://aistudio.google.com/) API key
+- [Alpaca Markets](https://alpaca.markets/) account (free) — for live market data + paper trading API
+- [Google AI Studio](https://aistudio.google.com/) API key — for the ARIA AI bot (optional; other bots work without it)
 
 ### Install
 
@@ -29,66 +32,77 @@ npm install
 
 ```bash
 cp .env.local.example .env.local
-# Edit .env.local and set GEMINI_API_KEY
+# Edit .env.local with your keys
 ```
-
-<!-- AUTO-GENERATED -->
-### Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEMINI_API_KEY` | Yes | Google Gemini API key used by all four trader agents |
-<!-- /AUTO-GENERATED -->
+| `ALPACA_API_KEY` | Yes | Alpaca API key (paper trading account) |
+| `ALPACA_API_SECRET` | Yes | Alpaca API secret |
+| `GEMINI_API_KEY` | No | Google Gemini API key — powers the ARIA AI bot |
 
 ---
 
 ## Commands
 
-<!-- AUTO-GENERATED -->
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server with hot reload |
+| `npm run dev` | Start development server |
 | `npm run build` | Production build with type checking |
 | `npm start` | Start production server (requires build first) |
 | `npm test` | Run test suite once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
-<!-- /AUTO-GENERATED -->
 
 ---
 
-## API
+## Usage
 
-### `POST /api/analyze`
+### Live mode (market hours)
 
-Runs all four trader agents against the given headline and returns their decisions plus the updated price.
+1. Start the dev server: `npm run dev`
+2. Open [localhost:3000](http://localhost:3000)
+3. Click **Start** — bots begin trading on live ticks from Alpaca
 
-**Request body**
-```json
-{
-  "headline": "NVDA beats earnings estimates by 20%",
-  "currentPrice": 875.50
-}
+### Replay mode (weekends / after-hours)
+
+1. Toggle **Replay** in the sim controls
+2. Click **Start Replay** — fetches the last trading day's 1-minute bars from Alpaca REST
+3. Use the speed buttons (**1× 5× 10× 50×**) to control playback speed
+4. Bots trade exactly as they would in live mode — same strategies, same order execution
+
+---
+
+## Architecture
+
+```
+Alpaca WebSocket ──► StreamManager ──► Orchestrator ──► StateBroadcaster ──► SSE ──► UI
+Alpaca REST      ──► ReplayEngine  ──►           ↑
+                                       Bot strategies (RSI, SMA, Momentum, MeanReversion, AI)
 ```
 
-**Response**
-```json
-{
-  "decisions": [
-    { "agentId": "momentum", "action": "BUY", "conviction": 0.85, "reasoning": "..." },
-    ...
-  ],
-  "priceResult": { "newPrice": 912.30, "delta": 36.80, "deltaPercent": 4.21 },
-  "partialFailure": false
-}
-```
+- **`Orchestrator`** — singleton that dispatches ticks to bots, executes orders, updates portfolios
+- **`StreamManager`** — wraps the Alpaca WebSocket; emits `tick` events during market hours
+- **`ReplayEngine`** — fetches historical bars, sorts them chronologically across tickers, emits identical `tick` events on a timer
+- **`StateBroadcaster`** — fans out `SimState` to all connected SSE clients
 
-**Error codes**
-| Status | Meaning |
-|--------|---------|
-| 400 | Invalid input (missing/bad headline or currentPrice) |
-| 429 | Rate limit exceeded (20 req/min per IP) |
-| 500 | Internal server error |
+Both `StreamManager` and `ReplayEngine` emit the same `MarketTick` shape — the `Orchestrator` is tick-source agnostic.
+
+---
+
+## API Routes
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/market/stream` | GET (SSE) | Streams full `SimState` to the UI |
+| `/api/market/snapshot` | GET | Current price snapshots for all watchlist tickers |
+| `/api/sim/start` | POST | Start simulation. Body: `{ mode?: "live"\|"replay", speed?: 1\|5\|10\|50, date?: "YYYY-MM-DD" }` |
+| `/api/sim/pause` | POST | Pause simulation |
+| `/api/sim/resume` | POST | Resume simulation |
+| `/api/sim/reset` | POST | Reset all bots and state |
+| `/api/sim/replay-speed` | POST | Change replay speed mid-playback. Body: `{ speed: 1\|5\|10\|50 }` |
+| `/api/bots` | GET/POST | List bots / add a custom bot |
+| `/api/bots/[id]` | GET/PATCH/DELETE | Get / update params / remove a bot |
 
 ---
 
@@ -96,12 +110,17 @@ Runs all four trader agents against the given headline and returns their decisio
 
 | File | Purpose |
 |------|---------|
-| `types/index.ts` | All TypeScript interfaces |
-| `lib/constants.ts` | Config: starting price, model ID, clamp values |
-| `lib/price-engine.ts` | Pure `calculateNewPrice()` — no side effects |
-| `lib/agents.ts` | Trader personalities + Gemini SDK calls |
-| `app/api/analyze/route.ts` | POST endpoint — input validation + orchestration |
-| `app/page.tsx` | Main UI — all state lives here |
+| `types/index.ts` | All TypeScript interfaces (`SimState`, `BotState`, `ReplayState`, etc.) |
+| `lib/constants.ts` | Watchlist, default bot configs, timing constants |
+| `lib/orchestrator.ts` | Core simulation engine — tick dispatch, order execution |
+| `lib/market/stream-manager.ts` | Alpaca WebSocket client |
+| `lib/market/replay-engine.ts` | Historical bar replay with configurable speed |
+| `lib/market/alpaca-rest.ts` | REST client — snapshots, bars, last trading day |
+| `lib/portfolio.ts` | Pure portfolio math — buy/sell execution, P&L |
+| `lib/strategies/` | RSI, SMA crossover, momentum, mean reversion strategies |
+| `lib/bots/ai-bot.ts` | ARIA — Gemini-powered trading bot |
+| `app/page.tsx` | Main UI — SSE client, all state |
+| `components/SimControls.tsx` | Start/pause/reset + mode toggle + replay speed |
 
 ---
 
@@ -111,4 +130,4 @@ Runs all four trader agents against the given headline and returns their decisio
 npm run test:coverage
 ```
 
-Coverage target: 80%+ on all `lib/` files.
+Coverage target: 80%+ on all `lib/` files. Strategies, portfolio math, orchestrator, and market clients are fully unit tested.
