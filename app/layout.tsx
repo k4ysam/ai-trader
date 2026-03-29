@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Trader Arena",
-  description: "Watch 4 AI traders react to NVDA headlines in real-time",
+  title: "Paper Trader",
+  description: "AI and rule-based bots trading with fake money against live market data",
 };
 
 export default function RootLayout({
