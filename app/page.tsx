@@ -9,6 +9,8 @@ import BotDetail from "@/components/BotDetail"
 import TradeFeed from "@/components/TradeFeed"
 import PriceChart from "@/components/PriceChart"
 import BotImporter from "@/components/BotImporter"
+import CommunityPanel from "@/components/community/CommunityPanel"
+import { useHeartbeat } from "@/lib/community/use-heartbeat"
 
 export default function Home() {
   const [simState, setSimState] = useState<SimState | null>(null)
@@ -88,6 +90,9 @@ export default function Home() {
       body: JSON.stringify(payload),
     })
   }
+
+  // ─── Community heartbeat (publishes local bot state when enabled) ─────────
+  useHeartbeat(simState)
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
@@ -195,6 +200,14 @@ export default function Home() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Community Intelligence panel */}
+        {simState && (
+          <CommunityPanel
+            selectedTicker={selectedTicker}
+            userBots={simState.bots}
+          />
         )}
       </div>
 

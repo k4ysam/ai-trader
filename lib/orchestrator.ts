@@ -269,6 +269,7 @@ export class Orchestrator extends EventEmitter {
         qty,
         price,
         timestamp: tick.timestamp,
+        confidence: signal.confidence,
         reasoning: signal.reasoning,
       }
 
@@ -345,6 +346,7 @@ export class Orchestrator extends EventEmitter {
           qty,
           price,
           timestamp: Date.now(),
+          confidence: signal.confidence,
           reasoning: signal.reasoning,
         }
 
