@@ -33,6 +33,14 @@ export interface PriceBar {
 
 export type TradeAction = "BUY" | "SELL" | "HOLD"
 
+/** One tool call recorded during an ARIA agent cycle. */
+export interface AgentToolCall {
+  tool: string
+  args: Record<string, unknown>
+  result: unknown
+  durationMs: number
+}
+
 export interface Order {
   botId: string
   ticker: Ticker
@@ -42,6 +50,7 @@ export interface Order {
   timestamp: number
   confidence: number // 0–1, from strategy signal
   reasoning?: string // AI bot only
+  agentTrace?: AgentToolCall[] // tool call sequence for AI agent orders
 }
 
 // ─── Portfolio ───────────────────────────────────────────────────────────────
