@@ -11,7 +11,8 @@ import { rsiStrategy } from "@/lib/strategies/rsi"
 import { smaCrossoverStrategy } from "@/lib/strategies/sma-crossover"
 import { momentumStrategy } from "@/lib/strategies/momentum"
 import { meanReversionStrategy } from "@/lib/strategies/mean-reversion"
-import { callAIBot, createAIBotConfig, createGeminiGenerateFn } from "@/lib/bots/ai-bot"
+import { createAIBotConfig } from "@/lib/bots/ai-bot"
+import { runAriaAgent } from "@/lib/bots/aria-agent"
 import { createThrottle } from "@/lib/bots/throttle"
 import { StateBroadcaster } from "@/lib/state-broadcaster"
 import { StreamManager } from "@/lib/market/stream-manager"
@@ -52,8 +53,7 @@ const STRATEGY_MAP: Record<Exclude<BotType, "ai" | "custom">, Strategy> = {
 
 export class Orchestrator extends EventEmitter {
   private state: SimState
-  private aiThrottle = createThrottle(AI_BOT_CADENCE_MS)
-  private geminiGenerateFn = this.buildGeminiFn()
+  private aiThrottle = createThrottle<{ signal: import("@/lib/strategies/types").StrategySignal; trace: import("@/types").AgentToolCall[] }>(AI_BOT_CADENCE_MS)
   private mode: SimMode = "live"
 
   constructor() {
@@ -281,12 +281,7 @@ export class Orchestrator extends EventEmitter {
       return { ...bot, portfolio: newPortfolio, lastDecision: order }
     })
 
-    // 4. Collect recent orders for AI context
-    const recentOrders = newBots
-      .flatMap((b) => (b.lastDecision ? [b.lastDecision] : []))
-      .slice(-5)
-
-    // 5. Update state synchronously
+    // 4. Update state synchronously
     this.state = {
       ...this.state,
       bots: newBots,
@@ -307,19 +302,12 @@ export class Orchestrator extends EventEmitter {
     }
     this.broadcast()
 
-    // 6. Fire AI bot async (fire-and-forget, throttled per ticker)
+    // 6. Fire AI agent async (fire-and-forget, throttled per ticker)
     const aiBot = this.state.bots.find((b) => b.config.type === "ai")
     if (aiBot) {
-      this.aiThrottle(ticker, async () => {
-        const input: StrategyInput = {
-          ticker,
-          bars: updatedBars,
-          currentPrice: price,
-          portfolio: aiBot.portfolio,
-          params: {},
-        }
-        return callAIBot(ticker, input, newSnapshot, recentOrders, this.geminiGenerateFn)
-      }).then((signal) => {
+      this.aiThrottle(ticker, () =>
+        runAriaAgent(ticker, price, tick.timestamp, () => this.state)
+      ).then(({ signal, trace }) => {
         if (signal.action === "HOLD") {
           this.state = {
             ...this.state,
@@ -348,6 +336,7 @@ export class Orchestrator extends EventEmitter {
           timestamp: Date.now(),
           confidence: signal.confidence,
           reasoning: signal.reasoning,
+          agentTrace: trace,
         }
 
         const newPortfolio = executeOrder(
@@ -365,7 +354,7 @@ export class Orchestrator extends EventEmitter {
         }
         this.broadcast()
       }).catch(() => {
-        // AI errors are non-fatal — just continue
+        // AI agent errors are non-fatal — simulation continues
       })
     }
   }
@@ -418,12 +407,6 @@ export class Orchestrator extends EventEmitter {
         isComplete: false,
       },
     }
-  }
-
-  private buildGeminiFn() {
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) return undefined
-    return createGeminiGenerateFn(apiKey)
   }
 
   private broadcast(): void {

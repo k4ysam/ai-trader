@@ -1,22 +1,17 @@
-import type { StrategySignal } from "@/lib/strategies/types"
+type ThrottledFn<T> = (ticker: string, fn: () => Promise<T>) => Promise<T>
 
-type ThrottledFn = (
-  ticker: string,
-  fn: () => Promise<StrategySignal>
-) => Promise<StrategySignal>
-
-interface CacheEntry {
-  result: StrategySignal
+interface CacheEntry<T> {
+  result: T
   calledAt: number
 }
 
-export function createThrottle(intervalMs: number): ThrottledFn {
-  const cache = new Map<string, CacheEntry>()
+export function createThrottle<T>(intervalMs: number): ThrottledFn<T> {
+  const cache = new Map<string, CacheEntry<T>>()
 
   return async function throttle(
     ticker: string,
-    fn: () => Promise<StrategySignal>
-  ): Promise<StrategySignal> {
+    fn: () => Promise<T>
+  ): Promise<T> {
     const now = Date.now()
     const entry = cache.get(ticker)
 

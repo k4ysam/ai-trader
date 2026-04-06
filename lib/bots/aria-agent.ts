@@ -1,4 +1,4 @@
-import { generateText } from "ai"
+import { generateText, stepCountIs } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { buildAriaTools } from "@/lib/bots/aria-tools"
 import type { AgentToolCall, SimState } from "@/types"
@@ -97,7 +97,7 @@ export async function runAriaAgent(
     await generateText({
       model: google("gemini-2.0-flash"),
       tools: buildAriaTools({ ticker, price, getState, trace }),
-      maxSteps: 5,
+      stopWhen: stepCountIs(5),
       system: ARIA_SYSTEM_PROMPT,
       prompt: `${ticker} is currently at $${price.toFixed(2)}. Analyze and make your trading decision now.`,
     })

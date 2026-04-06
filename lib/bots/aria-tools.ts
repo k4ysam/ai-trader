@@ -31,7 +31,7 @@ export function buildAriaTools(ctx: AriaToolsContext) {
       description:
         "Get the current portfolio: cash balance, open positions, and P&L. " +
         "Always call this first before making any trade decision.",
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         const t0 = Date.now()
         const state = ctx.getState()
@@ -71,7 +71,7 @@ export function buildAriaTools(ctx: AriaToolsContext) {
       description:
         "Get the current market price and daily stats for a ticker. " +
         "Use to get a fresh quote before deciding on size.",
-      parameters: z.object({
+      inputSchema: z.object({
         ticker: z.string().describe("Stock ticker symbol, e.g. NVDA"),
       }),
       execute: async ({ ticker }) => {
@@ -99,7 +99,7 @@ export function buildAriaTools(ctx: AriaToolsContext) {
       description:
         "Get technical analysis for a ticker: RSI14, SMA20, trend direction, and recent price bars. " +
         "Use to inform your decision with momentum and trend context.",
-      parameters: z.object({
+      inputSchema: z.object({
         ticker: z.string().describe("Stock ticker symbol"),
       }),
       execute: async ({ ticker }) => {
@@ -137,7 +137,7 @@ export function buildAriaTools(ctx: AriaToolsContext) {
       description:
         "Record your final trading decision to BUY or SELL. " +
         "Call this exactly once when you have decided. Do not call after hold().",
-      parameters: z.object({
+      inputSchema: z.object({
         ticker: z.string().describe("Stock ticker symbol"),
         action: z.enum(["BUY", "SELL"]).describe("Trade direction"),
         confidence: z.number().min(0).max(1).describe("Conviction level 0–1"),
@@ -172,7 +172,7 @@ export function buildAriaTools(ctx: AriaToolsContext) {
       description:
         "Explicitly decide to do nothing this cycle. " +
         "Call this when no trade is warranted. Do not call after place_order().",
-      parameters: z.object({
+      inputSchema: z.object({
         reasoning: z.string().describe("One sentence explaining why you are holding"),
       }),
       execute: async ({ reasoning }) => {

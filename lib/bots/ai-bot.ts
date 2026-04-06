@@ -1,3 +1,7 @@
+// NOTE: callAIBot, buildMarketContext, createGeminiGenerateFn, and GeminiGenerateFn
+// are deprecated. ARIA now uses runAriaAgent in lib/bots/aria-agent.ts.
+// These remain here only to avoid breaking any tests that import them.
+
 import { GoogleGenAI } from "@google/genai"
 import { MODEL_ID } from "@/lib/constants"
 import type { BotConfig, MarketSnapshot, Order, PriceBar, Portfolio, Ticker, TradeAction } from "@/types"
