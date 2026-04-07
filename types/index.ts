@@ -134,6 +134,14 @@ export interface ReplayState {
   isComplete: boolean
 }
 
+export interface AriaCycle {
+  action: TradeAction
+  reasoning: string
+  ticker: Ticker
+  timestamp: number
+  trace: AgentToolCall[]
+}
+
 export interface SimState {
   status: SimStatus
   bots: BotState[]
@@ -143,6 +151,7 @@ export interface SimState {
   tickCount: number
   startedAt: number | null
   ariaLastRunAt: number | null
+  ariaLastCycle: AriaCycle | null
   replay: ReplayState
 }
 

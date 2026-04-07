@@ -199,6 +199,7 @@ export default function Home() {
                   bot={selectedBot}
                   ariaLastRunAt={selectedBot.config.type === "ai" ? simState.ariaLastRunAt : undefined}
                   ariaCadenceMs={selectedBot.config.type === "ai" ? AI_BOT_CADENCE_MS : undefined}
+                  ariaLastCycle={selectedBot.config.type === "ai" ? simState.ariaLastCycle : undefined}
                 />
               ) : (
                 <TradeFeed bots={simState.bots} />

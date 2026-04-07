@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import type { BotState } from "@/types"
+import type { AgentToolCall, AriaCycle, BotState } from "@/types"
 
 interface BotDetailProps {
   bot: BotState
   ariaLastRunAt?: number | null
   ariaCadenceMs?: number
+  ariaLastCycle?: AriaCycle | null
 }
 
 function formatCountdown(ariaLastRunAt: number | null | undefined, cadence: number): string {
@@ -33,12 +34,37 @@ function useAriaCountdown(ariaLastRunAt: number | null | undefined, ariaCadenceM
   return label
 }
 
-export default function BotDetail({ bot, ariaLastRunAt, ariaCadenceMs }: BotDetailProps) {
+function TraceRow({ call }: { call: AgentToolCall }) {
+  const result = call.result
+  let resultStr: string
+  if (typeof result === "string") {
+    resultStr = result
+  } else if (result === null || result === undefined) {
+    resultStr = "—"
+  } else {
+    resultStr = JSON.stringify(result)
+  }
+  // Truncate long results for display
+  const display = resultStr.length > 120 ? resultStr.slice(0, 120) + "…" : resultStr
+
+  return (
+    <div className="flex items-start gap-2 py-1.5 border-b border-zinc-800/40 last:border-0">
+      <span className="shrink-0 font-mono text-[10px] text-violet-400 bg-violet-500/10 rounded px-1.5 py-0.5 mt-0.5">
+        {call.tool}
+      </span>
+      <span className="text-[10px] text-zinc-400 break-all leading-relaxed">{display}</span>
+      <span className="ml-auto shrink-0 text-[9px] text-zinc-600">{call.durationMs}ms</span>
+    </div>
+  )
+}
+
+export default function BotDetail({ bot, ariaLastRunAt, ariaCadenceMs, ariaLastCycle }: BotDetailProps) {
   const { portfolio, config } = bot
   const positions = Object.values(portfolio.positions)
   const history = [...portfolio.tradeHistory].reverse().slice(0, 15)
   const isAI = config.type === "ai"
   const countdown = useAriaCountdown(ariaLastRunAt, ariaCadenceMs)
+  const [traceOpen, setTraceOpen] = useState(false)
 
   return (
     <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
@@ -83,6 +109,57 @@ export default function BotDetail({ bot, ariaLastRunAt, ariaCadenceMs }: BotDeta
           </div>
         ))}
       </div>
+
+      {/* ARIA Last Cycle */}
+      {isAI && (
+        <div className="border-b border-zinc-800/60">
+          <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Last ARIA Cycle</div>
+          {ariaLastCycle ? (
+            <div className="px-4 pb-3 space-y-2">
+              {/* Action + reasoning */}
+              <div className="flex items-start gap-2">
+                <span className={`shrink-0 mt-0.5 rounded px-2 py-0.5 text-[10px] font-bold ${
+                  ariaLastCycle.action === "BUY"
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : ariaLastCycle.action === "SELL"
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-zinc-700/60 text-zinc-400"
+                }`}>
+                  {ariaLastCycle.action}
+                </span>
+                <p className="text-xs text-zinc-300 leading-relaxed">{ariaLastCycle.reasoning}</p>
+              </div>
+              {/* Ticker + timestamp */}
+              <div className="flex items-center gap-2 text-[10px] text-zinc-600">
+                <span>{ariaLastCycle.ticker}</span>
+                <span>·</span>
+                <span>{new Date(ariaLastCycle.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+              </div>
+              {/* Collapsible tool trace */}
+              {ariaLastCycle.trace.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setTraceOpen((o) => !o)}
+                    className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    <span>{traceOpen ? "▾" : "▸"}</span>
+                    <span>Tool trace ({ariaLastCycle.trace.length} steps)</span>
+                  </button>
+                  {traceOpen && (
+                    <div className="mt-2 rounded-md bg-zinc-950/60 border border-zinc-800/40 px-3 py-1">
+                      {ariaLastCycle.trace.map((call, i) => (
+                        <TraceRow key={i} call={call} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="px-4 pb-3 text-xs text-zinc-600">No cycle yet — ARIA fires in {countdown || "…"}</div>
+          )}
+        </div>
+      )}
 
       {/* Positions */}
       {positions.length > 0 && (

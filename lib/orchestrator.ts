@@ -18,6 +18,7 @@ import { StateBroadcaster } from "@/lib/state-broadcaster"
 import { StreamManager } from "@/lib/market/stream-manager"
 import { ReplayEngine } from "@/lib/market/replay-engine"
 import type {
+  AriaCycle,
   BotConfig,
   BotState,
   BotType,
@@ -309,6 +310,18 @@ export class Orchestrator extends EventEmitter {
         this.state = { ...this.state, ariaLastRunAt: Date.now() }
         return runAriaAgent(ticker, price, tick.timestamp, () => this.state)
       }).then(({ signal, trace }) => {
+        // Always record the last cycle regardless of action
+        this.state = {
+          ...this.state,
+          ariaLastCycle: {
+            action: signal.action,
+            reasoning: signal.reasoning ?? "",
+            ticker,
+            timestamp: Date.now(),
+            trace,
+          },
+        }
+
         if (signal.action === "HOLD") {
           this.state = {
             ...this.state,
@@ -399,6 +412,7 @@ export class Orchestrator extends EventEmitter {
       tickCount: 0,
       startedAt: null,
       ariaLastRunAt: null,
+      ariaLastCycle: null,
       replay: {
         mode: "live",
         speed: 1,
