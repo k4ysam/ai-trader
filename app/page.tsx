@@ -11,6 +11,7 @@ import PriceChart from "@/components/PriceChart"
 import BotImporter from "@/components/BotImporter"
 import CommunityPanel from "@/components/community/CommunityPanel"
 import { useHeartbeat } from "@/lib/community/use-heartbeat"
+import { AI_BOT_CADENCE_MS } from "@/lib/constants"
 
 export default function Home() {
   const [simState, setSimState] = useState<SimState | null>(null)
@@ -194,7 +195,11 @@ export default function Home() {
               <PriceChart ticker={selectedTicker} bars={chartBars} />
 
               {selectedBot ? (
-                <BotDetail bot={selectedBot} />
+                <BotDetail
+                  bot={selectedBot}
+                  ariaLastRunAt={selectedBot.config.type === "ai" ? simState.ariaLastRunAt : undefined}
+                  ariaCadenceMs={selectedBot.config.type === "ai" ? AI_BOT_CADENCE_MS : undefined}
+                />
               ) : (
                 <TradeFeed bots={simState.bots} />
               )}

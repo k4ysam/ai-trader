@@ -1,16 +1,44 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import type { BotState } from "@/types"
 
 interface BotDetailProps {
   bot: BotState
+  ariaLastRunAt?: number | null
+  ariaCadenceMs?: number
 }
 
-export default function BotDetail({ bot }: BotDetailProps) {
+function formatCountdown(ariaLastRunAt: number | null | undefined, cadence: number): string {
+  if (!ariaLastRunAt) return "Ready"
+  const remaining = ariaLastRunAt + cadence - Date.now()
+  if (remaining <= 0) return "Deciding…"
+  const h = Math.floor(remaining / 3_600_000)
+  const m = Math.floor((remaining % 3_600_000) / 60_000)
+  const s = Math.floor((remaining % 60_000) / 1_000)
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
+function useAriaCountdown(ariaLastRunAt: number | null | undefined, ariaCadenceMs: number | undefined): string {
+  const [label, setLabel] = useState("")
+
+  useEffect(() => {
+    if (!ariaCadenceMs) return
+    const cadence = ariaCadenceMs
+    setLabel(formatCountdown(ariaLastRunAt, cadence))
+    const id = setInterval(() => setLabel(formatCountdown(ariaLastRunAt, cadence)), 1_000)
+    return () => clearInterval(id)
+  }, [ariaLastRunAt, ariaCadenceMs])
+
+  return label
+}
+
+export default function BotDetail({ bot, ariaLastRunAt, ariaCadenceMs }: BotDetailProps) {
   const { portfolio, config } = bot
   const positions = Object.values(portfolio.positions)
   const history = [...portfolio.tradeHistory].reverse().slice(0, 15)
   const isAI = config.type === "ai"
+  const countdown = useAriaCountdown(ariaLastRunAt, ariaCadenceMs)
 
   return (
     <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
@@ -26,6 +54,12 @@ export default function BotDetail({ bot }: BotDetailProps) {
           </div>
           <span className="text-xs text-zinc-500">{config.type}</span>
         </div>
+        {isAI && countdown && (
+          <div className="ml-3 flex items-center gap-1.5 rounded-md bg-zinc-800/60 px-2 py-1">
+            <span className="text-[10px] text-zinc-500">Next decision</span>
+            <span className="font-mono text-[11px] font-semibold text-violet-400">{countdown}</span>
+          </div>
+        )}
         <div className="ml-auto text-right">
           <div className={`text-lg font-bold ${portfolio.totalPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
             {portfolio.totalPnl >= 0 ? "+" : ""}{portfolio.totalPnlPct.toFixed(2)}%
