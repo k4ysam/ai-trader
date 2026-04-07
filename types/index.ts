@@ -142,6 +142,7 @@ export interface SimState {
   priceHistory: Record<Ticker, PriceBar[]>
   tickCount: number
   startedAt: number | null
+  ariaLastRunAt: number | null
   replay: ReplayState
 }
 

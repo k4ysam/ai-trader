@@ -305,9 +305,10 @@ export class Orchestrator extends EventEmitter {
     // 6. Fire AI agent async (fire-and-forget, throttled per ticker)
     const aiBot = this.state.bots.find((b) => b.config.type === "ai")
     if (aiBot) {
-      this.aiThrottle(ticker, () =>
-        runAriaAgent(ticker, price, tick.timestamp, () => this.state)
-      ).then(({ signal, trace }) => {
+      this.aiThrottle(ticker, () => {
+        this.state = { ...this.state, ariaLastRunAt: Date.now() }
+        return runAriaAgent(ticker, price, tick.timestamp, () => this.state)
+      }).then(({ signal, trace }) => {
         if (signal.action === "HOLD") {
           this.state = {
             ...this.state,
@@ -397,6 +398,7 @@ export class Orchestrator extends EventEmitter {
       priceHistory: {},
       tickCount: 0,
       startedAt: null,
+      ariaLastRunAt: null,
       replay: {
         mode: "live",
         speed: 1,

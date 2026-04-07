@@ -6,7 +6,7 @@ export const STARTING_BALANCE = 100_000
 
 export const MAX_POSITION_PCT = 0.2 // max 20% of portfolio per stock
 
-export const AI_BOT_CADENCE_MS = 15_000 // ms between AI decisions per ticker
+export const AI_BOT_CADENCE_MS = 14_400_000 // ms between AI decisions per ticker (~4 h, fits Gemini free tier 20 RPD)
 
 export const PRICE_HISTORY_BARS = 50 // bars kept in memory per stock
 
